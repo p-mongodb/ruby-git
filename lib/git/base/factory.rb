@@ -32,8 +32,8 @@ module Git
       end
 
       # @return [Git::Diff] a Git::Diff object
-      def diff(objectish = 'HEAD', obj2 = nil)
-        Git::Diff.new(self, objectish, obj2)
+      def diff(objectish = 'HEAD', obj2 = nil, **opts)
+        Git::Diff.new(self, objectish, obj2, **opts)
       end
 
       # @return [Git::Object] a Git object
