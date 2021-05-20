@@ -4,10 +4,11 @@ module Git
   class Diff
     include Enumerable
 
-    def initialize(base, from = nil, to = nil)
+    def initialize(base, from = nil, to = nil, **opts)
       @base = base
       @from = from && from.to_s
       @to = to && to.to_s
+      @opts = opts
 
       @path = nil
       @full_diff = nil
@@ -101,7 +102,7 @@ module Git
     private
 
       def cache_full
-        @full_diff ||= @base.lib.diff_full(@from, @to, {:path_limiter => @path})
+        @full_diff ||= @base.lib.diff_full(@from, @to, {:path_limiter => @path}.update(**@opts))
       end
 
       def process_full

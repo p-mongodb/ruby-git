@@ -432,6 +432,9 @@ module Git
       diff_opts << obj1
       diff_opts << obj2 if obj2.is_a?(String)
       diff_opts << '--' << opts[:path_limiter] if opts[:path_limiter].is_a? String
+      if v = opts[:submodule]
+        diff_opts << "--submodule=#{v}"
+      end
 
       command('diff', diff_opts)
     end
@@ -1086,6 +1089,10 @@ module Git
       end
 
       global_opts = []
+      if cmd == 'diff'
+        # For submodule diffs --work-tree alone is insufficient and -C is needed.
+        global_opts << "-C" << @git_work_dir if !@git_work_dir.nil?
+      end
       global_opts << "--git-dir=#{@git_dir}" if !@git_dir.nil?
       global_opts << "--work-tree=#{@git_work_dir}" if !@git_work_dir.nil?
       global_opts << %w[-c core.quotePath=true]
