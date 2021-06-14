@@ -814,10 +814,13 @@ module Git
       command('remote', arr_opts)
     end
 
-    def remote_set_url(name, url)
+    # accepts options:
+    #   :push
+    def remote_set_url(name, url, opts = {})
       arr_opts = ['set-url']
       arr_opts << name
       arr_opts << url
+      arr_opts << '--push' if opts[:push]
 
       command('remote', arr_opts)
     end
