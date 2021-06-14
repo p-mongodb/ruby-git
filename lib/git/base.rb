@@ -402,11 +402,14 @@ module Git
     # sets the url for a remote
     # url can be a git url or a Git::Base object if it's a local reference
     #
+    # accepts options:
+    #   :push
+    #
     #  @git.set_remote_url('scotts_git', 'git://repo.or.cz/rubygit.git')
     #
-    def set_remote_url(name, url)
+    def set_remote_url(name, url, opts = {})
       url = url.repo.path if url.is_a?(Git::Base)
-      self.lib.remote_set_url(name, url)
+      self.lib.remote_set_url(name, url, opts)
       Git::Remote.new(self, name)
     end
 
