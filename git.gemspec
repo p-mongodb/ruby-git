@@ -6,7 +6,7 @@ Gem::Specification.new do |s|
   s.email = 'schacon@gmail.com'
   s.homepage = 'http://github.com/ruby-git/ruby-git'
   s.license = 'MIT'
-  s.name = 'git'
+  s.name = 'p-mongo-git'
   s.summary = 'An API to create, read, and manipulate Git repositories'
   s.description = <<~DESCRIPTION
     The Git Gem provides an API that can be used to create, read, and manipulate
