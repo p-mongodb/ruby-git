@@ -7,10 +7,16 @@ class TestArchive < Test::Unit::TestCase
   def setup
     set_file_paths
     @git = Git.open(@wdir)
+    @tempfiles = []
+  end
+
+  def teardown
+    @tempfiles.clear
   end
 
   def tempfile
     tempfile_object = Tempfile.new('archive-test')
+    @tempfiles << tempfile_object # prevent deletion until teardown
     tempfile_object.close # close to avoid locking from git processes
     tempfile_object.path
   end
@@ -45,7 +51,7 @@ class TestArchive < Test::Unit::TestCase
 
     f = @git.object('v2.6').archive(tempfile, :format => 'tar', :prefix => 'test/', :path => 'ex_dir/')
     assert(File.exist?(f))
- 
+
     lines = Minitar::Input.open(f).each.to_a.map(&:full_name)
     assert_match(%r{test/}, lines[1])
     assert_match(%r{test/ex_dir/ex\.txt}, lines[3])

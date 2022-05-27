@@ -108,7 +108,7 @@ g.index.writable?
 g.repo
 g.dir
 
-g.log   # returns array of Git::Commit objects
+g.log   # returns a Git::Log object, which is an Enumerator of Git::Commit objects
 g.log.since('2 weeks ago')
 g.log.between('v2.5', 'v2.6')
 g.log.each {|l| puts l.sha }
@@ -146,6 +146,7 @@ g.revparse('v2.5:Makefile')
 
 g.branches # returns Git::Branch objects
 g.branches.local
+g.current_branch
 g.branches.remote
 g.branches[:master].gcommit
 g.branches['origin/master'].gcommit
@@ -203,13 +204,23 @@ g = Git.init
   { :repository => '/opt/git/proj.git',
       :index => '/tmp/index'} )
 
-g = Git.clone(URI, NAME, :path => '/tmp/checkout')
+# Clone from a git url
+git_url = 'https://github.com/ruby-git/ruby-git.git'
+# Clone into the ruby-git directory
+g = Git.clone(git_url)
+
+# Clone into /tmp/clone/ruby-git-clean
+name = 'ruby-git-clean'
+path = '/tmp/clone'
+g = Git.clone(git_url, name, :path => path)
+g.dir #=> /tmp/clone/ruby-git-clean
+
 g.config('user.name', 'Scott Chacon')
 g.config('user.email', 'email@email.com')
 
 # Clone can take an optional logger
 logger = Logger.new
-g = Git.clone(URI, NAME, :log => logger)
+g = Git.clone(git_url, NAME, :log => logger)
 
 g.add                                   # git add -- "."
 g.add(:all=>true)                       # git add --all -- "."
@@ -224,6 +235,14 @@ g.remove('file.txt', :cached => true)		# git rm -f --cached -- "file.txt"
 
 g.commit('message')
 g.commit_all('message')
+
+# Sign a commit using the gpg key configured in the user.signingkey config setting
+g.config('user.signingkey', '0A46826A')
+g.commit('message', gpg_sign: true)
+
+# Sign a commit using a specified gpg key
+key_id = '0A46826A'
+g.commit('message', gpg_sign: key_id)
 
 g = Git.clone(repo, 'myrepo')
 g.chdir do
@@ -269,6 +288,7 @@ g.remote(name).merge(branch)
 g.fetch
 g.fetch(g.remotes.first)
 g.fetch('origin', {:ref => 'some/ref/head'} )
+g.fetch(all: true, force: true, depth: 2)
 
 g.pull
 g.pull(Git::Repo, Git::Branch) # fetch and a merge

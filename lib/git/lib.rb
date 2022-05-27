@@ -1,4 +1,3 @@
-require 'rchardet'
 require 'tempfile'
 require 'zlib'
 
@@ -71,10 +70,12 @@ module Git
     # options:
     #   :bare
     #   :working_directory
+    #   :initial_branch
     #
     def init(opts={})
       arr_opts = []
       arr_opts << '--bare' if opts[:bare]
+      arr_opts << "--initial-branch=#{opts[:initial_branch]}" if opts[:initial_branch]
 
       command('init', arr_opts)
     end
@@ -94,9 +95,9 @@ module Git
     #
     # @return [Hash] the options to pass to {Git::Base.new}
     #
-    def clone(repository, name, opts = {})
+    def clone(repository_url, directory, opts = {})
       @path = opts[:path] || '.'
-      clone_dir = opts[:path] ? File.join(@path, name) : name
+      clone_dir = opts[:path] ? File.join(@path, directory) : directory
 
       arr_opts = []
       arr_opts << '--bare' if opts[:bare]
@@ -105,11 +106,11 @@ module Git
       arr_opts << '--config' << opts[:config] if opts[:config]
       arr_opts << '--origin' << opts[:remote] || opts[:origin] if opts[:remote] || opts[:origin]
       arr_opts << '--recursive' if opts[:recursive]
-      arr_opts << "--mirror" if opts[:mirror]
+      arr_opts << '--mirror' if opts[:mirror]
 
       arr_opts << '--'
 
-      arr_opts << repository
+      arr_opts << repository_url
       arr_opts << clone_dir
 
       command('clone', arr_opts)
@@ -418,7 +419,7 @@ module Git
 
       hsh = {}
       command_lines('grep', grep_opts).each do |line|
-        if m = /(.*)\:(\d+)\:(.*)/.match(line)
+        if m = /(.*?)\:(\d+)\:(.*)/.match(line)
           hsh[m[1]] ||= []
           hsh[m[1]] << [m[2].to_i, m[3]]
         end
@@ -586,8 +587,12 @@ module Git
 
     ## WRITE COMMANDS ##
 
-    def config_set(name, value)
-      command('config', name, value)
+    def config_set(name, value, options = {})
+      if options[:file].to_s.empty?
+        command('config', name, value)
+      else
+        command('config', '--file', options[:file], name, value)
+      end
     end
 
     def global_config_set(name, value)
@@ -645,6 +650,7 @@ module Git
     #  :date
     #  :no_verify
     #  :allow_empty_message
+    #  :gpg_sign
     #
     # @param [String] message the commit message to be used
     # @param [Hash] opts the commit options to be used
@@ -658,6 +664,14 @@ module Git
       arr_opts << "--date=#{opts[:date]}" if opts[:date].is_a? String
       arr_opts << '--no-verify' if opts[:no_verify]
       arr_opts << '--allow-empty-message' if opts[:allow_empty_message]
+      if opts[:gpg_sign]
+        arr_opts <<
+          if opts[:gpg_sign] == true
+            '--gpg-sign'
+          else
+            "--gpg-sign=#{opts[:gpg_sign]}"
+          end
+      end
 
       command('commit', arr_opts)
     end
@@ -672,6 +686,7 @@ module Git
     def clean(opts = {})
       arr_opts = []
       arr_opts << '--force' if opts[:force]
+      arr_opts << '-ff' if opts[:ff]
       arr_opts << '-d' if opts[:d]
       arr_opts << '-x' if opts[:x]
 
@@ -762,6 +777,7 @@ module Git
 
     def merge(branch, message = nil, opts = {})
       arr_opts = []
+      arr_opts << '--no-commit' if opts[:no_commit]
       arr_opts << '--no-ff' if opts[:no_ff]
       arr_opts << '-m' << message if message
       arr_opts += [branch]
@@ -865,13 +881,18 @@ module Git
       command('tag', arr_opts)
     end
 
-
     def fetch(remote, opts)
-      arr_opts = [remote]
-      arr_opts << opts[:ref] if opts[:ref]
+      arr_opts = []
+      arr_opts << '--all' if opts[:all]
       arr_opts << '--tags' if opts[:t] || opts[:tags]
       arr_opts << '--prune' if opts[:p] || opts[:prune]
+      arr_opts << '--prune-tags' if opts[:P] || opts[:'prune-tags']
+      arr_opts << '--force' if opts[:f] || opts[:force]
       arr_opts << '--unshallow' if opts[:unshallow]
+      arr_opts << '--depth' << opts[:depth] if opts[:depth]
+      arr_opts << '--' if remote || opts[:ref]
+      arr_opts << remote if remote
+      arr_opts << opts[:ref] if opts[:ref]
 
       command('fetch', arr_opts)
     end
@@ -1077,7 +1098,8 @@ module Git
       end
       global_opts << "--git-dir=#{@git_dir}" if !@git_dir.nil?
       global_opts << "--work-tree=#{@git_work_dir}" if !@git_work_dir.nil?
-      global_opts << ["-c", "color.ui=false"]
+      global_opts << %w[-c core.quotePath=true]
+      global_opts << %w[-c color.ui=false]
 
       opts = [opts].flatten.map {|s| escape(s) }.join(' ')
 
@@ -1168,35 +1190,10 @@ module Git
       arr_opts
     end
 
-    def default_encoding
-      __ENCODING__.name
-    end
-
-    def best_guess_encoding
-      # Encoding::ASCII_8BIT.name
-      Encoding::UTF_8.name
-    end
-
-    def detected_encoding(str)
-      CharDet.detect(str)['encoding'] || best_guess_encoding
-    end
-
-    def encoding_options
-      { invalid: :replace, undef: :replace }
-    end
-
-    def normalize_encoding(str)
-      return str if str.valid_encoding? && str.encoding.name == default_encoding
-
-      return str.encode(default_encoding, str.encoding, **encoding_options) if str.valid_encoding?
-
-      str.encode(default_encoding, detected_encoding(str), **encoding_options)
-    end
-
     def run_command(git_cmd, &block)
       return IO.popen(git_cmd, &block) if block_given?
 
-      `#{git_cmd}`.lines.map { |l| normalize_encoding(l) }.join
+      `#{git_cmd}`.lines.map { |l| Git::EncodingUtils.normalize_encoding(l) }.join
     end
 
     def escape(s)
@@ -1208,8 +1205,9 @@ module Git
     end
 
     def escape_for_windows(s)
-      # Windows does not need single quote escaping inside double quotes
-      %Q{"#{s}"}
+      # Escape existing double quotes in s and then wrap the result with double quotes
+      escaped_string = s.to_s.gsub('"','\\"')
+      %Q{"#{escaped_string}"}
     end
 
     def windows_platform?
@@ -1217,6 +1215,5 @@ module Git
       win_platform_regex = /mingw|mswin/
       RUBY_PLATFORM =~ win_platform_regex || RUBY_DESCRIPTION =~ win_platform_regex
     end
-
   end
 end
